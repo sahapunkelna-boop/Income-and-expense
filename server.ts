@@ -31,25 +31,33 @@ function isLastDayOfMonth(date: Date): boolean {
   return tomorrow.getMonth() !== date.getMonth();
 }
 
-// Helper to send message to LINE Notify
-async function sendLineNotify(token: string, message: string): Promise<boolean> {
+// Helper to send message via LINE Messaging API (push message)
+async function sendLineMessage(channelAccessToken: string, userId: string, message: string): Promise<boolean> {
   try {
-    const response = await fetch("https://notify-api.line.me/api/notify", {
+    const response = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Bearer ${token}`
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${channelAccessToken}`
       },
-      body: new URLSearchParams({ message })
+      body: JSON.stringify({
+        to: userId,
+        messages: [
+          {
+            type: "text",
+            text: message
+          }
+        ]
+      })
     });
     
     if (!response.ok) {
-      console.error("LINE Notify response error:", await response.text());
+      console.error("LINE Messaging API response error:", await response.text());
       return false;
     }
     return true;
   } catch (error) {
-    console.error("Error sending LINE Notify:", error);
+    console.error("Error sending LINE Message via Messaging API:", error);
     return false;
   }
 }
@@ -213,35 +221,35 @@ app.post("/api/parse-transaction", async (req, res) => {
   }
 });
 
-// Endpoint: Test LINE Notify Connection
+// Endpoint: Test LINE Messaging API Connection
 app.post("/api/line/test-notify", async (req, res) => {
-  const { token } = req.body;
-  if (!token) {
-    return res.status(400).json({ error: "LINE token is required" });
+  const { channelAccessToken, userId } = req.body;
+  if (!channelAccessToken || !userId) {
+    return res.status(400).json({ error: "Channel Access Token and User ID are required" });
   }
 
   const testMessage = `
 🔔 ทดสอบการแจ้งเตือนจาก "ระบบบัญชีรายรับ-รายจ่าย AI"
 ━━━━━━━━━━━━━━━━━━━━━━
-ยินดีด้วย! บัญชีของคุณเชื่อมต่อกับ LINE Notify เรียบร้อยแล้ว 🎉
+ยินดีด้วย! บัญชีของคุณเชื่อมต่อกับ LINE Messaging API (LINE OA) เรียบร้อยแล้ว 🎉
 ระบบพร้อมจัดส่งสรุปยอดกราฟฟิกสวยงามและบทวิเคราะห์ออมเงินรายเดือนให้คุณโดยอัตโนมัติในทุกสิ้นเดือนครับ!
 
 🔗 เข้าเยี่ยมชมแดชบอร์ดกราฟฟิก: ${process.env.APP_URL || "https://ai.studio/build"}
 `;
 
-  const success = await sendLineNotify(token, testMessage);
+  const success = await sendLineMessage(channelAccessToken, userId, testMessage);
   if (success) {
     res.json({ success: true, message: "Test notification sent successfully" });
   } else {
-    res.status(500).json({ error: "Failed to send LINE notification. Please verify your token." });
+    res.status(500).json({ error: "Failed to send LINE notification. Please verify your Access Token and User ID." });
   }
 });
 
 // Endpoint: Manually trigger monthly summary delivery
 app.post("/api/line/trigger-monthly", async (req, res) => {
-  const { yearMonth, token } = req.body;
-  if (!yearMonth || !token) {
-    return res.status(400).json({ error: "yearMonth (YYYY-MM) and token are required" });
+  const { yearMonth, channelAccessToken, userId } = req.body;
+  if (!yearMonth || !channelAccessToken || !userId) {
+    return res.status(400).json({ error: "yearMonth, channelAccessToken, and userId are required" });
   }
 
   try {
@@ -262,12 +270,12 @@ app.post("/api/line/trigger-monthly", async (req, res) => {
     }
 
     const reportMessage = await generateMonthlySummaryReport(yearMonth, transactions);
-    const success = await sendLineNotify(token, reportMessage);
+    const success = await sendLineMessage(channelAccessToken, userId, reportMessage);
 
     if (success) {
       res.json({ success: true, message: `จัดส่งสรุปยอดประจำเดือน ${yearMonth} เรียบร้อยแล้ว!` });
     } else {
-      res.status(500).json({ error: "Failed to send LINE Notify report" });
+      res.status(500).json({ error: "Failed to send LINE Messaging API report" });
     }
   } catch (error: any) {
     console.error("Trigger monthly summary error:", error);
@@ -296,7 +304,8 @@ async function runEndOfMonthCheck() {
         const config = settingsSnap.data();
         
         if (
-          config.lineNotifyToken &&
+          config.channelAccessToken &&
+          config.userId &&
           config.lineNotifyEnabled &&
           config.autoMonthlySummaryEnabled &&
           config.lastMonthlySummarySent !== currentYearMonth
@@ -316,7 +325,7 @@ async function runEndOfMonthCheck() {
 
           if (transactions.length > 0) {
             const reportMessage = await generateMonthlySummaryReport(currentYearMonth, transactions);
-            const success = await sendLineNotify(config.lineNotifyToken, reportMessage);
+            const success = await sendLineMessage(config.channelAccessToken, config.userId, reportMessage);
             
             if (success) {
               await updateDoc(settingsRef, {

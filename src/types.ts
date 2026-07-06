@@ -9,7 +9,8 @@ export interface Transaction {
 }
 
 export interface LINEConfig {
-  lineNotifyToken: string;
+  channelAccessToken: string;
+  userId: string;
   lineNotifyEnabled: boolean;
   autoMonthlySummaryEnabled: boolean;
   lastMonthlySummarySent: string; // YYYY-MM
