@@ -1,0 +1,6 @@
+{
+  "name": "Daily Income Expense Tracker & LINE Summary",
+  "description": "บันทึกรายรับ-รายจ่ายประจำวันอัจฉริยะด้วย AI พร้อมแดชบอร์ดกราฟฟิกสรุปยอด และแจ้งเตือนสรุปผลรายเดือนผ่าน LINE อัตโนมัติ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
